@@ -6,6 +6,7 @@ import zarr
 import random
 
 from Transforms import Transforms
+import torch.nn as nn
 
 
 ## takes 4D array and returns biggest value for every 3D image
@@ -13,6 +14,12 @@ biggest_img_value = lambda x: np.max(x, axis = (0,1,2))
 def normalize_4D(data):
   biggest_vals = np.expand_dims(biggest_img_value(data),axis = (0,1))
   data = np.divide(data, biggest_vals)
+  ## downsample to quater size
+  # data = torch.unsqueeze(torch.from_numpy(data), dim = 0)
+  # down_sample = nn.MaxPool3d((2, 2, 2))
+  # data = down_sample(data)
+  # data = torch.squeeze(data, dim = 0)
+
   return data
 
 # only consider finished neurons
@@ -42,9 +49,9 @@ def transform_row_to_labels(row, finished_neurons, n_neurons, image_shape):
         try:
           ## center neurons
             ind = finished_neurons.index(key) * 3 # assert
-            scaled_z = val[0] - image_shape[0]/2
-            scaled_y = val[1] - image_shape[1]/2
-            scaled_x = val[2] - image_shape[2]/2
+            scaled_z = (val[0] - image_shape[0]/2)
+            scaled_y = (val[1] - image_shape[1]/2)
+            scaled_x = (val[2] - image_shape[2]/2)
             res[ind], res[ind+1], res[ind+2] = scaled_z, scaled_y, scaled_x
         except:
             pass
@@ -79,7 +86,6 @@ def load_images_and_positions():
     torch.save(y_positions, 'y_pos_worm5')
     print("created positions from traces file")
 
-  print(img_data.shape, y_positions.shape, n_samples, n_neurons)
   return img_data, y_positions, n_samples, n_neurons 
 
 
@@ -144,7 +150,7 @@ class SupervisedDataset(object):
     elif self.mode == 1: # VAL
       self.indxs = indices[int(n_samples*0.7):int(n_samples*0.85)]
     elif self.mode == 2: # TEST
-      self.indxs = indices[int(n_samples*0.85):int(n_samples*0.85)+10]
+      self.indxs = indices[int(n_samples*0.85):]
     else:
       exit("mode must be between 0-2")
 

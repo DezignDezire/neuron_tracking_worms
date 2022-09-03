@@ -6,15 +6,16 @@ from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import LearningRateMonitor
 
 from Dataset import SupervisedDataset
-from Net3D import SupervisedModel, Net3D
+from Net3D import Net3D
+from SupervisedLightningModel import SupervisedModel
 
 
 start = time.time()
 
 
-TRAIN = True
+TRAIN = False
 LOAD_PRETRAINED_MODEL = True
-MODEL_CHECKPOINT = "supervised-Net3D-epoch=01-val_loss=762.67.ckpt"
+MODEL_CHECKPOINT = "supervised-Net3D-epoch=06-val_loss=574.99.ckpt"
 
 batch_size = 2
 
@@ -52,8 +53,6 @@ if TRAIN:
 else:
     trainer = pl.Trainer(logger=logger, accelerator='gpu', devices=1)
     trainer.test(model, verbose=True)
-
-
 
 
 end = time.time()
