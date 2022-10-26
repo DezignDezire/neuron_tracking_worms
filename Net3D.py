@@ -3,30 +3,22 @@ import torch.nn as nn
 
 class Net3D(nn.Module):
  
-    def __init__(self, n_out):
+    def __init__(self, n_channels, n_out):
         super(Net3D, self).__init__()
         # 1 input image channel, 6 output channels, 5x5 square convolution kernel
-        self.conv1 = self.conv_layer_3d(1, 8)
-        self.conv2 = self.conv_layer_3d(8, 15)
-        self.conv3 = self.conv_layer_3d(15, 25)
-        # self.conv4 = self.conv_layer_3d(120, 250)
+        self.conv1 = self.conv_layer_3d(1, n_channels)
+        self.conv2 = self.conv_layer_3d(n_channels, n_channels * 2)
+        self.conv3 = self.conv_layer_3d(n_channels * 2, n_channels * 4)
+        self.conv4 = self.conv_layer_3d(n_channels * 4, n_channels * 8, z_pool=1)
         
-        self.fc_1 = self.fc_layer(1750, 900)
-        self.fc_2 = nn.Linear(900, n_out)
+        self.fc = self.fc_layer(n_channels * 8 * 20 * 28, 3200)
+        self.final_fc = nn.Linear(3200, n_out)
 
-    def conv_layer_3d(self, in_c, out_c, kernel_size=(5, 5, 5), pool = 5):
+    def conv_layer_3d(self, in_c, out_c, kernel_size=(3, 3, 3), z_pool = 2):
         conv_layer = nn.Sequential(
-        nn.Conv3d(in_c, out_c, kernel_size, padding=2),
+        nn.Conv3d(in_c, out_c, kernel_size, padding=1),
         nn.LeakyReLU(),
-        nn.MaxPool3d((2, pool, pool)),
-        )
-        return conv_layer
-
-    def conv_layer_3d_UP(self, in_c, out_c, kernel_size=(5, 5, 5), pool = 5):
-        conv_layer = nn.Sequential(
-        nn.Conv3d(in_c, out_c, kernel_size, padding=2),
-        nn.LeakyReLU(),
-        nn.MaxPool3d((2, pool, pool)),
+        nn.MaxPool3d((z_pool, 2, 2)),
         )
         return conv_layer
 
@@ -44,9 +36,10 @@ class Net3D(nn.Module):
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.conv3(x)
-        # x = self.conv4(x)
+        x = self.conv4(x)
         x = torch.flatten(x, 1) # flatten all dimensions except the batch dimension
-        x = self.fc_1(x)
-        x = self.fc_2(x)
+        x = self.fc(x)
+        x = self.final_fc(x)
         return x
 
+    

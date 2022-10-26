@@ -3,11 +3,12 @@ import pandas as pd
 import h5py
 import torch
 import zarr
-import random
 
 from Transforms import Transforms
 import torch.nn as nn
 
+
+DATA_DIRECTORY = '/scratch/neurobiology/zimmer/Philipp/bright_worm5/'
 
 ## takes 4D array and returns biggest value for every 3D image
 biggest_img_value = lambda x: np.max(x, axis = (0,1,2))
@@ -15,10 +16,10 @@ def normalize_4D(data):
   biggest_vals = np.expand_dims(biggest_img_value(data),axis = (0,1))
   data = np.divide(data, biggest_vals)
   ## downsample to quater size
-  # data = torch.unsqueeze(torch.from_numpy(data), dim = 0)
-  # down_sample = nn.MaxPool3d((2, 2, 2))
-  # data = down_sample(data)
-  # data = torch.squeeze(data, dim = 0)
+  data = torch.unsqueeze(torch.from_numpy(data), dim = 0)
+  down_sample = nn.MaxPool3d((2, 2, 2))
+  data = down_sample(data)
+  data = torch.squeeze(data, dim = 0)
 
   return data
 
@@ -49,9 +50,9 @@ def transform_row_to_labels(row, finished_neurons, n_neurons, image_shape):
         try:
           ## center neurons
             ind = finished_neurons.index(key) * 3 # assert
-            scaled_z = (val[0] - image_shape[0]/2)
-            scaled_y = (val[1] - image_shape[1]/2)
-            scaled_x = (val[2] - image_shape[2]/2)
+            scaled_z = val[0] - image_shape[0]/2
+            scaled_y = val[1] - image_shape[1]/2
+            scaled_x = val[2] - image_shape[2]/2
             res[ind], res[ind+1], res[ind+2] = scaled_z, scaled_y, scaled_x
         except:
             pass
@@ -68,12 +69,12 @@ def get_ground_truth_coordinates(traces, finished_neurons, n_neurons, image_shap
 
 def load_images_and_positions():
     ## image size: n_samples, 21, 650, 900 - (z, y, x)
-  img_data = zarr.open('C:/Users/ZimAdmin/Documents/bright_worm5/dat/2021-12-17_16-28-19_worm5-channel-0-pco_camera1bigtiff_preprocessed.zarr.zip')
+  img_data = zarr.open(DATA_DIRECTORY + 'dat/2021-12-17_16-28-19_worm5-channel-0-pco_camera1bigtiff_preprocessed.zarr.zip')
   ## load labels - neuron center positions
-  traces_file = h5py.File('C:/Users/ZimAdmin/Documents/bright_worm5/4-traces/red_traces.h5')
+  traces_file = h5py.File(DATA_DIRECTORY + '4-traces/red_traces.h5')
   # column_names = ['area', 'z', 'x', 'y', 'intensity_image', 'label']
   traces = pd.DataFrame(traces_file['df_with_missing']['block0_values'])
-  finished_neurons = get_finished_neurons('C:/Users/ZimAdmin/Documents/bright_worm5/3-tracking/manual_annotation/manual_tracking.csv')
+  finished_neurons = get_finished_neurons(DATA_DIRECTORY + '3-tracking/manual_annotation/manual_tracking.csv')
   n_samples = len(traces)
   n_neurons = len(finished_neurons)
   ## y_positions shape: neuron1_x, neuron1_y, neuron1_z, neuron2_x, neuron2_y,...
@@ -89,7 +90,6 @@ def load_images_and_positions():
   return img_data, y_positions, n_samples, n_neurons 
 
 
-
 def scale_positions(positions, n_neurons, image_shape):
   scale = 10
   output = np.zeros((n_neurons, 3))
@@ -99,41 +99,6 @@ def scale_positions(positions, n_neurons, image_shape):
   output[:,1] = positions[:,1] / image_shape[2] * scale
   output[:,2] = positions[:,2] / image_shape[2] * scale
   return output
-
-
-# ## TRANSFORMATIONS
-# def random_rotate_image(image, positions):
-#   angle = random.choice(list(range(360)))
-#   image = TF.rotate(image, angle)
-#   radians = torch.tensor(angle * math.pi / 180)
-#   # positions[:,2] = positions[:,2] * math.cos(angle) - positions[:,1] * math.sin(angle)
-#   # positions[:,1] = positions[:,1] * math.cos(angle) + positions[:,2] * math.sin(angle)
-#   points = torch.tensor(positions[:,[2,1]].T, dtype=float)
-#   c, s = torch.cos(radians), torch.sin(radians)
-#   R = torch.tensor([[c, s], [-s, c]], dtype=float)
-#   res = R @ points
-#   res = res.T
-#   stacked = np.stack([positions[:,0], res[:,1], res[:,0]])
-#   res = torch.from_numpy(stacked).T
-#   return image, res
-
-# ## flips can only be applied on 0-th and 2-nd order
-# def random_flip_image(image, positions):
-  mode_0 = [1, 1, 1]
-  mode_yx = [1, -1, -1]
-  mode_yz = [-1, -1, 1]
-  mode_zx = [-1, 1, -1]
-
-  modes = [mode_0, mode_yx, mode_yz, mode_zx]
-  mode = torch.tensor(random.choice(modes))
-
-  ## flip image
-  dims = tuple(torch.where(mode == torch.tensor(-1))[0])
-  image = torch.flip(image, dims)
-
-  ## flip positions
-  positions = positions * mode
-  return image, positions
 
 
 class SupervisedDataset(object):
@@ -151,6 +116,7 @@ class SupervisedDataset(object):
       self.indxs = indices[int(n_samples*0.7):int(n_samples*0.85)]
     elif self.mode == 2: # TEST
       self.indxs = indices[int(n_samples*0.85):]
+      # self.indxs = indices[int(n_samples*0.85):int(n_samples*0.85)+100]
     else:
       exit("mode must be between 0-2")
 
@@ -161,10 +127,11 @@ class SupervisedDataset(object):
   def __getitem__(self, idx):
     idx = self.indxs[idx]
     image = normalize_4D(self.img_data[idx])  # dual index for dataset mode
-    image = torch.tensor(image, dtype=torch.float32)    # turn into float
+    image = torch.tensor(image.clone().detach(), dtype=torch.float32)    # turn into float
     positions = torch.tensor(self.y_positions[idx], dtype=torch.float32)
+    positions = positions / 2
     positions = positions.reshape(self.n_neurons, 3)
-
+    positions = scale_positions(positions, self.n_neurons, image.shape)
     if self.mode == 0:
       image, positions = self.transforms(image, positions)
     
