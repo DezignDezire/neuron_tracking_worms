@@ -1,4 +1,4 @@
-# neuron tracking of worms
+#  Whole Brain Neuron Tracking in Freely Moving C. Elegans
 freely moving whole brain imaging of c. elegans using deep learning
 
 
